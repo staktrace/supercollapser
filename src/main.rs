@@ -105,12 +105,14 @@ static ALL_TOKENS : &'static [&'static str] = &[
     "not sw",
 ];
 
-fn validate_tokenset(tokenset: &Vec<String>) {
+fn validate_tokenset(tokenset: &Vec<String>) -> bool {
     for token in tokenset {
         if !ALL_TOKENS.contains(&token.as_str()) {
-            panic!("Unrecognized token {}", token);
+            error!("Unrecognized token {}", token);
+            return false;
         }
     }
+    true
 }
 
 fn dump_tree(tree: &Vec<ConditionNode>, indent: usize) {
@@ -265,7 +267,9 @@ fn collapse(tokensets: &mut Vec<Vec<String>>) {
     dump_tree(&condition_tree, 1);
     for tokenset in tokensets.iter() {
         debug!("Applying tokenset {}", tokenset.join(", "));
-        validate_tokenset(tokenset);
+        if !validate_tokenset(tokenset) {
+            return;
+        }
         apply_tokenset_to_tree(tokenset, &mut condition_tree);
         debug!("Tree state");
         dump_tree(&condition_tree, 1);
