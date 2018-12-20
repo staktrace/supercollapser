@@ -45,8 +45,8 @@ fn build_condition_tree() -> Vec<ConditionNode> {
             ConditionNode::new("not webrender", vec![
                 ConditionNode::new("(bits == 64)", vec![
                     ConditionNode::new("debug", vec![
-                        ConditionNode::new_leaf("sw"),
-                        ConditionNode::new_leaf("not sw"),
+                        ConditionNode::new_leaf("sw-e10s"),
+                        ConditionNode::new_leaf("not sw-e10s"),
                     ]),
                     ConditionNode::new_leaf("not debug"),
                 ]),
@@ -95,14 +95,15 @@ static ALL_TOKENS : &'static [&'static str] = &[
     "(version == \"6.1.7601\")",
     "(version == \"10.0.15063\")",
     "(version == \"Ubuntu 16.04\")",
+    "(version == \"OS X 10.10.5\")",
     "(bits == 64)",
     "(bits == 32)",
     "(processor == \"x86\")",
     "(processor == \"x86_64\")",
     "e10s",
     "not e10s",
-    "sw",
-    "not sw",
+    "sw-e10s",
+    "not sw-e10s",
 ];
 
 fn validate_tokenset(tokenset: &Vec<String>) -> bool {
@@ -305,7 +306,7 @@ fn main() {
     for line in reader.lines() {
         let line = line.unwrap();
         let prefix = line.find("if ").map(|ix| line[0..ix + 3].to_string());
-        let suffix = line.rfind(':').map(|ix| line[ix..].to_string());
+        let suffix = line.find(':').map(|ix| line[ix..].to_string());
         let part_of_set = match (&set_prefix, &prefix) {
             (&Some(ref x), &Some(ref y)) if x != y => false,
             (_, &None) => false,
