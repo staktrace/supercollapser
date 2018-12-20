@@ -1,3 +1,7 @@
+#[macro_use]
+extern crate log;
+extern crate env_logger;
+
 use std::env;
 use std::fs::File;
 use std::io::BufRead;
@@ -111,11 +115,12 @@ fn validate_tokenset(tokenset: &Vec<String>) {
 
 fn dump_tree(tree: &Vec<ConditionNode>, indent: usize) {
     for condition in tree {
-        eprint!("{}{}", "    ".repeat(indent), condition.condition);
         match condition.node_type {
-            NodeType::Leaf(ref flag) => eprintln!(" => {}", flag),
+            NodeType::Leaf(ref flag) => {
+                debug!("{}{} => {}", "    ".repeat(indent), condition.condition, flag);
+            }
             NodeType::SubConditions(ref subs) => {
-                eprintln!("");
+                debug!("{}{}", "    ".repeat(indent), condition.condition);
                 dump_tree(subs, indent + 1);
             }
         }
@@ -184,7 +189,7 @@ fn apply_tokenset_to_tree(tokens: &Vec<String>, tree: &mut Vec<ConditionNode>) {
     fn walk_down<'a>(tokens: &Vec<String>, tree: &'a mut Vec<ConditionNode>) -> Option<&'a mut Vec<ConditionNode>> {
         for condition in tree.iter_mut() {
             if tokens.contains(&condition.condition) {
-                eprintln!("Matched {}", condition.condition);
+                debug!("Matched {}", condition.condition);
                 match condition.node_type {
                     NodeType::Leaf(ref mut flag) => {
                         *flag = true;
@@ -256,13 +261,13 @@ fn count_inverted_tokensets(tree: &Vec<ConditionNode>) -> usize {
 
 fn collapse(tokensets: &mut Vec<Vec<String>>) {
     let mut condition_tree = build_condition_tree();
-    eprintln!("Initial tree state");
+    debug!("Initial tree state");
     dump_tree(&condition_tree, 1);
     for tokenset in tokensets.iter() {
-        eprintln!("Applying tokenset {}", tokenset.join(", "));
+        debug!("Applying tokenset {}", tokenset.join(", "));
         validate_tokenset(tokenset);
         apply_tokenset_to_tree(tokenset, &mut condition_tree);
-        eprintln!("Tree state");
+        debug!("Tree state");
         dump_tree(&condition_tree, 1);
     }
     tokensets.clear();
@@ -271,7 +276,7 @@ fn collapse(tokensets: &mut Vec<Vec<String>>) {
 
     let inverted_count = count_inverted_tokensets(&condition_tree);
     if inverted_count < tokensets.len() {
-        eprintln!("Can represent the inverted state with fewer conditions, consider changing the default!");
+        info!("Can represent the inverted state with fewer conditions, consider changing the default!");
     }
 }
 
@@ -286,6 +291,8 @@ fn emit(tokensets: &Vec<Vec<String>>, set_prefix: &Option<String>, set_suffix: &
 }
 
 fn main() {
+    env_logger::init();
+
     let file = File::open(env::args().skip(1).next().unwrap()).unwrap();
     let reader = BufReader::new(&file);
     let mut tokensets : Vec<Vec<String>> = Vec::new();
@@ -330,7 +337,7 @@ fn main() {
                     }
                 })
                 .collect();
-            eprintln!("Collecting tokenset {:?}", tokens);
+            debug!("Collecting tokenset {:?}", tokens);
             tokensets.push(tokens);
             continue;
         } else {
