@@ -75,8 +75,51 @@ fn build_condition_tree() -> Vec<ConditionNode> {
                 ]),
             ]),
         ]),
-        ConditionNode::new_leaf("(os == android)"),
+        ConditionNode::new_leaf("(os == \"android\")"),
     ]
+}
+
+static ALL_TOKENS : &'static [&'static str] = &[
+    "(os == \"linux\")",
+    "(os == \"win\")",
+    "(os == \"mac\")",
+    "(os == \"android\")",
+    "webrender",
+    "not webrender",
+    "debug",
+    "not debug",
+    "(version == \"6.1.7601\")",
+    "(version == \"10.0.15063\")",
+    "(version == \"Ubuntu 16.04\")",
+    "(bits == 64)",
+    "(bits == 32)",
+    "(processor == \"x86\")",
+    "(processor == \"x86_64\")",
+    "e10s",
+    "not e10s",
+    "sw",
+    "not sw",
+];
+
+fn validate_tokenset(tokenset: &Vec<String>) {
+    for token in tokenset {
+        if !ALL_TOKENS.contains(&token.as_str()) {
+            panic!("Unrecognized token {}", token);
+        }
+    }
+}
+
+fn dump_tree(tree: &Vec<ConditionNode>, indent: usize) {
+    for condition in tree {
+        eprint!("{}{}", "    ".repeat(indent), condition.condition);
+        match condition.node_type {
+            NodeType::Leaf(ref flag) => eprintln!(" => {}", flag),
+            NodeType::SubConditions(ref subs) => {
+                eprintln!("");
+                dump_tree(subs, indent + 1);
+            }
+        }
+    }
 }
 
 fn mark_all_leafs(tree: &mut Vec<ConditionNode>) {
@@ -131,7 +174,7 @@ fn apply_tokenset_to_tree(tokens: &Vec<String>, tree: &mut Vec<ConditionNode>) {
             matches += 1;
         }
     }
-    if matches > 0 {
+    if matches > 1 {
         panic!("Tokenset {} matched {} condition branches!", tokens.join(","), matches);
     } else if matches == 0 {
         mark_all_leafs(tree);
@@ -141,6 +184,7 @@ fn apply_tokenset_to_tree(tokens: &Vec<String>, tree: &mut Vec<ConditionNode>) {
     fn walk_down<'a>(tokens: &Vec<String>, tree: &'a mut Vec<ConditionNode>) -> Option<&'a mut Vec<ConditionNode>> {
         for condition in tree.iter_mut() {
             if tokens.contains(&condition.condition) {
+                eprintln!("Matched {}", condition.condition);
                 match condition.node_type {
                     NodeType::Leaf(ref mut flag) => {
                         *flag = true;
@@ -212,8 +256,14 @@ fn count_inverted_tokensets(tree: &Vec<ConditionNode>) -> usize {
 
 fn collapse(tokensets: &mut Vec<Vec<String>>) {
     let mut condition_tree = build_condition_tree();
+    eprintln!("Initial tree state");
+    dump_tree(&condition_tree, 1);
     for tokenset in tokensets.iter() {
+        eprintln!("Applying tokenset {}", tokenset.join(", "));
+        validate_tokenset(tokenset);
         apply_tokenset_to_tree(tokenset, &mut condition_tree);
+        eprintln!("Tree state");
+        dump_tree(&condition_tree, 1);
     }
     tokensets.clear();
     let mut current_conditions = vec![];
@@ -266,8 +316,21 @@ fn main() {
             set_suffix = suffix;
             let prefix_len = set_prefix.as_ref().unwrap().len();
             let suffix_len = set_suffix.as_ref().unwrap().len();
-            let tokens = line[prefix_len .. line.len() - suffix_len].split(" and ").map(String::from).collect();
-            //eprintln!("Collecting tokenset {:?}", tokens);
+            let tokens = line[prefix_len .. line.len() - suffix_len]
+                .split(" and ")
+                .map(|s| {
+                    let t = s.trim();
+                    if t.contains("==") && t.chars().next() != Some('(') {
+                        let mut parensized = String::from("(");
+                        parensized.push_str(t);
+                        parensized.push(')');
+                        parensized
+                    } else {
+                        String::from(s)
+                    }
+                })
+                .collect();
+            eprintln!("Collecting tokenset {:?}", tokens);
             tokensets.push(tokens);
             continue;
         } else {
