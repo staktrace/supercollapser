@@ -9,80 +9,64 @@ use std::io::BufReader;
 use std::iter::FromIterator;
 use std::vec::Vec;
 
-pub struct ConditionNode {
-    pub condition: String,
-    pub node_type: NodeType,
+pub struct CollapseRule {
+    pub prerequisites: Vec<String>,
+    pub alternatives: Vec<String>,
 }
 
-impl ConditionNode {
-    pub fn new(condition: &str, subnodes: Vec<ConditionNode>) -> Self {
-        ConditionNode {
-            condition: condition.to_string(),
-            node_type: NodeType::SubConditions(subnodes),
-        }
-    }
-
-    pub fn new_leaf(condition: &str) -> Self {
-        ConditionNode {
-            condition: condition.to_string(),
-            node_type: NodeType::Leaf(false),
+impl CollapseRule {
+    pub fn new(prerequisites: Vec<&str>, alternatives: Vec<&str>) -> Self {
+        CollapseRule {
+            prerequisites: prerequisites.into_iter().map(String::from).collect(),
+            alternatives: alternatives.into_iter().map(String::from).collect(),
         }
     }
 }
 
-pub enum NodeType {
-    Leaf(bool),
-    SubConditions(Vec<ConditionNode>),
-}
-
-fn build_condition_tree() -> Vec<ConditionNode> {
+fn build_collapse_rules() -> Vec<CollapseRule> {
     vec![
-        ConditionNode::new("(os == \"linux\")", vec![
-            ConditionNode::new("webrender", vec![
-                ConditionNode::new_leaf("debug"),
-                ConditionNode::new_leaf("not debug"),
-            ]),
-            ConditionNode::new("not webrender", vec![
-                ConditionNode::new("(bits == 64)", vec![
-                    ConditionNode::new("debug", vec![
-                        ConditionNode::new_leaf("sw-e10s"),
-                        ConditionNode::new_leaf("not sw-e10s"),
-                    ]),
-                    ConditionNode::new_leaf("not debug"),
-                ]),
-                ConditionNode::new("(bits == 32)", vec![
-                    ConditionNode::new("debug", vec![
-                        ConditionNode::new_leaf("e10s"),
-                        ConditionNode::new_leaf("not e10s"),
-                    ]),
-                    ConditionNode::new_leaf("not debug"),
-                ]),
-            ]),
+        CollapseRule::new(vec![
+            "(os == \"mac\")",
+        ], vec![
+            "(version == \"OS X 10.10.5\")",
         ]),
-        ConditionNode::new("(os == \"mac\")", vec![
-            ConditionNode::new_leaf("debug"),
-            ConditionNode::new_leaf("not debug"),
+        CollapseRule::new(vec![
+            "(os == \"mac\")",
+        ], vec![
+            "not webrender",
         ]),
-        ConditionNode::new("(os == \"win\")", vec![
-            ConditionNode::new("(version == \"6.1.7601\")", vec![
-                ConditionNode::new_leaf("debug"),
-                ConditionNode::new_leaf("not debug"),
-            ]),
-            ConditionNode::new("(version == \"10.0.15063\")", vec![
-                ConditionNode::new("webrender", vec![
-                    ConditionNode::new_leaf("debug"),
-                    ConditionNode::new_leaf("not debug"),
-                ]),
-                ConditionNode::new("not webrender", vec![
-                    ConditionNode::new_leaf("debug"),
-                    ConditionNode::new_leaf("not debug"),
-                ]),
-            ]),
+        CollapseRule::new(vec![
+            "(os == \"mac\")",
+        ], vec![
+            "(processor == \"x86_64\")",
         ]),
-        ConditionNode::new_leaf("(os == \"android\")"),
+        CollapseRule::new(vec![
+            "(os == \"mac\")",
+        ], vec![
+            "(bits == 64)",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+            "(version == \"6.1.7601\")",
+        ], vec![
+            "not webrender",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+            "(version == \"6.1.7601\")",
+        ], vec![
+            "(processor == \"x86\")",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+            "(version == \"6.1.7601\")",
+        ], vec![
+            "(bits == 32)",
+        ]),
     ]
 }
 
+/*
 static ALL_TOKENS : &'static [&'static str] = &[
     "(os == \"linux\")",
     "(os == \"win\")",
@@ -115,174 +99,54 @@ fn validate_tokenset(tokenset: &Vec<String>) -> bool {
     }
     true
 }
+*/
 
-fn dump_tree(tree: &Vec<ConditionNode>, indent: usize) {
-    for condition in tree {
-        match condition.node_type {
-            NodeType::Leaf(ref flag) => {
-                debug!("{}{} => {}", "    ".repeat(indent), condition.condition, flag);
-            }
-            NodeType::SubConditions(ref subs) => {
-                debug!("{}{}", "    ".repeat(indent), condition.condition);
-                dump_tree(subs, indent + 1);
-            }
-        }
-    }
-}
-
-fn is_fully_true(tree: &Vec<ConditionNode>) -> bool {
-    for condition in tree {
-        match condition.node_type {
-            NodeType::Leaf(ref flag) => {
-                if !*flag {
-                    return false;
-                }
-            }
-            NodeType::SubConditions(ref subs) => {
-                if !is_fully_true(subs) {
-                    return false;
-                }
-            }
+fn match_prereqs(rule: &CollapseRule, tokenset: &Vec<String>) -> bool {
+    for prereq in &rule.prerequisites {
+        if !tokenset.iter().any(|t| t == prereq) {
+            return false;
         }
     }
     true
 }
 
-fn is_fully_false(tree: &Vec<ConditionNode>) -> bool {
-    for condition in tree {
-        match condition.node_type {
-            NodeType::Leaf(ref flag) => {
-                if *flag {
-                    return false;
-                }
-            }
-            NodeType::SubConditions(ref subs) => {
-                if !is_fully_false(subs) {
-                    return false;
-                }
-            }
-        }
-    }
-    true
-}
-
-fn apply_tokenset_to_tree(tokens: &Vec<String>, tree: &mut Vec<ConditionNode>) {
-    let mut matches = 0;
-    for condition in tree.iter() {
-        if tokens.contains(&condition.condition) {
-            matches += 1;
-        }
-    }
-    if matches > 1 {
-        panic!("Tokenset {} matched {} condition branches!", tokens.join(","), matches);
-    } else if matches == 0 {
-        for condition in tree.iter_mut() {
-            match condition.node_type {
-                NodeType::Leaf(ref mut flag) => {
-                    *flag = true;
-                }
-                NodeType::SubConditions(ref mut subs) => {
-                    apply_tokenset_to_tree(tokens, subs);
-                }
-            }
-        }
-        return;
-    }
-
-    fn walk_down<'a>(tokens: &Vec<String>, tree: &'a mut Vec<ConditionNode>) -> Option<&'a mut Vec<ConditionNode>> {
-        for condition in tree.iter_mut() {
-            if tokens.contains(&condition.condition) {
-                debug!("Matched {}", condition.condition);
-                match condition.node_type {
-                    NodeType::Leaf(ref mut flag) => {
-                        *flag = true;
-                        return None;
-                    }
-                    NodeType::SubConditions(ref mut subs) => {
-                        return Some(subs);
-                    }
-                };
-            }
-        }
-        panic!("We should have taken the matches == 0 branch above");
-    }
-
-    if let Some(subtree) = walk_down(tokens, tree) {
-        apply_tokenset_to_tree(tokens, subtree);
-    }
-}
-
-fn build_tokensets( // recursive function to generate tokensets from a tree
-    tree: &Vec<ConditionNode>, // source
-    tokensets: &mut Vec<Vec<String>>, // destination
-    current_conditions: &mut Vec<String>, // recursive information
-) {
-    for condition in tree {
-        match condition.node_type {
-            NodeType::Leaf(ref flag) => {
-                if *flag {
-                    let mut tokenset = current_conditions.clone();
-                    tokenset.push(condition.condition.clone());
-                    tokensets.push(tokenset);
-                }
-            }
-            NodeType::SubConditions(ref subs) => {
-                if is_fully_true(subs) {
-                    let mut tokenset = current_conditions.clone();
-                    tokenset.push(condition.condition.clone());
-                    tokensets.push(tokenset);
-                } else {
-                    current_conditions.push(condition.condition.clone());
-                    build_tokensets(subs, tokensets, current_conditions);
-                    current_conditions.pop();
-                }
-            }
-        }
-    }
-}
-
-fn count_inverted_tokensets(tree: &Vec<ConditionNode>) -> usize {
-    let mut count = 0;
-    for condition in tree {
-        match condition.node_type {
-            NodeType::Leaf(ref flag) => {
-                if !flag {
-                    count += 1;
-                }
-            }
-            NodeType::SubConditions(ref subs) => {
-                if is_fully_false(subs) {
-                    count += 1;
-                } else {
-                    count += count_inverted_tokensets(subs);
-                }
-            }
-        }
-    }
-    count
+fn strip_token(token: &String, tokenset: &Vec<String>) -> Vec<String> {
+    tokenset.clone().into_iter().filter(|t| t != token).collect()
 }
 
 fn collapse(tokensets: &mut Vec<Vec<String>>) {
-    let mut condition_tree = build_condition_tree();
-    debug!("Initial tree state");
-    dump_tree(&condition_tree, 1);
-    for tokenset in tokensets.iter() {
-        debug!("Applying tokenset {}", tokenset.join(", "));
-        if !validate_tokenset(tokenset) {
-            return;
-        }
-        apply_tokenset_to_tree(tokenset, &mut condition_tree);
-        debug!("Tree state");
-        dump_tree(&condition_tree, 1);
-    }
-    tokensets.clear();
-    let mut current_conditions = vec![];
-    build_tokensets(&condition_tree, tokensets, &mut current_conditions);
+    let rules = build_collapse_rules();
 
-    let inverted_count = count_inverted_tokensets(&condition_tree);
-    if inverted_count < tokensets.len() {
-        info!("Can represent the inverted state with fewer conditions, consider changing the default!");
-    }
+    //let mut changed = false;
+    //loop {
+        for rule in rules {
+            let mut satisfying_prereqs = Vec::new();
+            let mut i = 0;
+            while i != tokensets.len() {
+                if match_prereqs(&rule, &tokensets[i]) {
+                    satisfying_prereqs.push(tokensets.remove(i));
+                } else {
+                    i += 1;
+                }
+            }
+            if rule.alternatives.len() > satisfying_prereqs.len() {
+                continue;
+            }
+            if rule.alternatives.len() == 1 {
+                for i in 0..satisfying_prereqs.len() {
+                    satisfying_prereqs[i] = strip_token(&rule.alternatives[0], &satisfying_prereqs[i]);
+                }
+            } else if rule.alternatives.len() == 2 {
+            } else {
+                unimplemented!("Add generic nCx implementation");
+            }
+            tokensets.extend(satisfying_prereqs.into_iter());
+        }
+        //if !changed {
+        //    break;
+        //}
+        //changed = false;
+    //}
 }
 
 fn emit(tokensets: &Vec<Vec<String>>, set_prefix: &Option<String>, set_suffix: &Option<String>) {
