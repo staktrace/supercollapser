@@ -130,15 +130,6 @@ fn dump_tree(tree: &Vec<ConditionNode>, indent: usize) {
     }
 }
 
-fn mark_all_leafs(tree: &mut Vec<ConditionNode>) {
-    for condition in tree {
-        match condition.node_type {
-            NodeType::Leaf(ref mut flag) => *flag = true,
-            NodeType::SubConditions(ref mut subs) => mark_all_leafs(subs),
-        }
-    }
-}
-
 fn is_fully_true(tree: &Vec<ConditionNode>) -> bool {
     for condition in tree {
         match condition.node_type {
@@ -185,7 +176,16 @@ fn apply_tokenset_to_tree(tokens: &Vec<String>, tree: &mut Vec<ConditionNode>) {
     if matches > 1 {
         panic!("Tokenset {} matched {} condition branches!", tokens.join(","), matches);
     } else if matches == 0 {
-        mark_all_leafs(tree);
+        for condition in tree.iter_mut() {
+            match condition.node_type {
+                NodeType::Leaf(ref mut flag) => {
+                    *flag = true;
+                }
+                NodeType::SubConditions(ref mut subs) => {
+                    apply_tokenset_to_tree(tokens, subs);
+                }
+            }
+        }
         return;
     }
 
