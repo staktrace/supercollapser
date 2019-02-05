@@ -7,7 +7,7 @@ in mozilla-central.
 
 ```
 git clone https://github.com/staktrace/supercollapser
-cd supercollapesr
+cd supercollapser
 ./supercollapse /path/to/mozilla-central
 ```
 
