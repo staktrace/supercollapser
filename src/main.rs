@@ -9,6 +9,7 @@ use std::io::BufReader;
 use std::iter::FromIterator;
 use std::vec::Vec;
 
+#[derive(Debug)]
 pub struct CollapseRule {
     pub prerequisites: Vec<String>,
     pub alternatives: Vec<String>,
@@ -25,10 +26,16 @@ impl CollapseRule {
 
 fn build_collapse_rules() -> Vec<CollapseRule> {
     vec![
+        // MacOS rules
         CollapseRule::new(vec![
             "(os == \"mac\")",
         ], vec![
             "(version == \"OS X 10.10.5\")",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"mac\")",
+        ], vec![
+            "e10s",
         ]),
         CollapseRule::new(vec![
             "(os == \"mac\")",
@@ -44,6 +51,14 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
             "(os == \"mac\")",
         ], vec![
             "(bits == 64)",
+        ]),
+
+        // Win32 rules
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+            "(version == \"6.1.7601\")",
+        ], vec![
+            "e10s",
         ]),
         CollapseRule::new(vec![
             "(os == \"win\")",
@@ -62,6 +77,34 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
             "(version == \"6.1.7601\")",
         ], vec![
             "(bits == 32)",
+        ]),
+
+        // Win64 rules
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+            "(version == \"10.0.15063\")",
+        ], vec![
+            "e10s",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+            "(version == \"10.0.15063\")",
+        ], vec![
+            "(processor == \"x86_64\")",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+            "(version == \"10.0.15063\")",
+        ], vec![
+            "(bits == 64)",
+        ]),
+
+        // Win version collapsing
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+        ], vec![
+            "(version == \"6.1.7601\")",
+            "(version == \"10.0.15063\")",
         ]),
     ]
 }
@@ -110,15 +153,139 @@ fn match_prereqs(rule: &CollapseRule, tokenset: &Vec<String>) -> bool {
     true
 }
 
+fn has_token(token: &String, tokenset: &Vec<String>) -> bool {
+    tokenset.iter().any(|t| t == token)
+}
+
 fn strip_token(token: &String, tokenset: &Vec<String>) -> Vec<String> {
     tokenset.clone().into_iter().filter(|t| t != token).collect()
+}
+
+fn try_collapse(tokenset: &Vec<String>, rule: &CollapseRule) -> Option<Vec<String>> {
+    if rule.alternatives.len() != 1 {
+        return None;
+    }
+    if !match_prereqs(rule, tokenset) {
+        return None;
+    }
+    if !has_token(&rule.alternatives[0], tokenset) {
+        return None;
+    }
+    return Some(strip_token(&rule.alternatives[0], tokenset));
+}
+
+fn flip(token: &str) -> String {
+    if token.find("not ") == Some(0) {
+        token[4..].to_string()
+    } else {
+        "not ".to_string() + token
+    }
+}
+
+fn try_collapse_flip(a: &Vec<String>, b: &Vec<String>) -> Option<Vec<String>> {
+    if a.len() != b.len() {
+        return None;
+    }
+    let mut result = Vec::new();
+    let mut flipped = false;
+    for tok in a {
+        if b.contains(tok) {
+            trace!("Token match {}", tok);
+            result.push(tok.clone());
+        } else if !flipped && b.contains(&flip(tok)) {
+            trace!("Flipped {}", tok);
+            flipped = true;
+        } else {
+            trace!("Token mismatch {}", tok);
+            return None;
+        }
+    }
+    Some(result)
+}
+
+fn remaining_alt<'a>(used_alt: &str, rule: &'a CollapseRule) -> Option<&'a str> {
+    assert!(rule.alternatives.len() == 2);
+    if rule.alternatives[0] == used_alt {
+        Some(&rule.alternatives[1])
+    } else if rule.alternatives[1] == used_alt {
+        Some(&rule.alternatives[0])
+    } else {
+        None
+    }
+}
+
+fn try_collapse2(a: &Vec<String>, b: &Vec<String>, rule: &CollapseRule) -> Option<Vec<String>> {
+    if rule.alternatives.len() != 2 {
+        return None;
+    }
+    if a.len() != b.len() {
+        return None;
+    }
+    if !match_prereqs(rule, a) {
+        return None;
+    }
+    if !match_prereqs(rule, b) {
+        return None;
+    }
+    let mut result = Vec::new();
+    let mut matched = false;
+    for tok in a {
+        if b.contains(tok) {
+            trace!("Token match {}", tok);
+            result.push(tok.clone());
+            continue;
+        } else if matched {
+            trace!("Token mismatch {}", tok);
+            return None;
+        }
+        if let Some(alt) = remaining_alt(tok, rule) {
+            if b.contains(&String::from(alt)) {
+                trace!("Matched alternatives {},{}", tok, alt);
+                matched = true;
+                continue;
+            }
+        }
+    }
+    Some(result)
 }
 
 fn collapse(tokensets: &mut Vec<Vec<String>>) {
     let rules = build_collapse_rules();
 
-    //let mut changed = false;
-    //loop {
+    let mut changed = false;
+    loop {
+        'outer: for i in 0..tokensets.len() {
+            for rule in &rules {
+                if let Some(set) = try_collapse(&tokensets[i], rule) {
+                    debug!("Collapsed {:?} to {:?} via {:?}", tokensets[i], set, rule);
+                    tokensets[i] = set;
+                }
+            }
+            for j in 0..i {
+                if let Some(set) = try_collapse_flip(&tokensets[i], &tokensets[j]) {
+                    debug!("Collapsed {:?} and {:?} to {:?} via flip", tokensets[i], tokensets[j], set);
+                    tokensets[j] = set;
+                    tokensets.remove(i);
+                    changed = true;
+                    break 'outer;
+                }
+                for rule in &rules {
+                    if let Some(set) = try_collapse2(&tokensets[i], &tokensets[j], rule) {
+                        debug!("Collapsed {:?} and {:?} to {:?} via {:?}", tokensets[i], tokensets[j], set, rule);
+                        tokensets[j] = set;
+                        tokensets.remove(i);
+                        changed = true;
+                        break 'outer;
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+        changed = false;
+    }
+/*
         for rule in rules {
             let mut satisfying_prereqs = Vec::new();
             let mut i = 0;
@@ -142,11 +309,7 @@ fn collapse(tokensets: &mut Vec<Vec<String>>) {
             }
             tokensets.extend(satisfying_prereqs.into_iter());
         }
-        //if !changed {
-        //    break;
-        //}
-        //changed = false;
-    //}
+*/
 }
 
 fn emit(tokensets: &Vec<Vec<String>>, set_prefix: &Option<String>, set_suffix: &Option<String>) {
