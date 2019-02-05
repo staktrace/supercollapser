@@ -19,3 +19,8 @@ mozilla-central folder. Diff to verify and commit.
 The collapsing is done using a set of rules hard-coded in `src/main.rs`. It
 needs to be updated if we add new test configurations and such. So always
 do a try push with all configurations before landing the generated changes.
+
+## More documentation
+
+There is a big comment above the ruleset in `src/main.rs` that explains how
+the rulesets work and walks through a concrete example.

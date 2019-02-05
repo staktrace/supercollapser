@@ -24,6 +24,74 @@ impl CollapseRule {
     }
 }
 
+// The set of rules to use when collapsing. Each rule has two vectors: the
+// first is a vector of "prerequisites" and the second is a vector of
+// "alternatives". In order to collapse a group of tokensets via a rule, the
+// following conditions must be satisfied:
+// 1) all the tokensets in the group must match all the "prerequisite"
+//    conditions,
+// 2) there must be a 1:1 mapping between the "alternative" conditions and the
+//    tokensets - that is, each tokenset must contain exactly one of the
+//    "alternative" conditions.
+// 3) other than the "alternative" condition, all the conditions in the tokenset
+//    must be the same across all tokensets in the group.
+// The collapsing happens by removing the alternative conditions from the
+// tokensets in the group, which will make them identical, and then dropping
+// all of the tokensets except for one.
+//
+// The rules are applied over and over until nothing changes any more.
+//
+// As a concrete example consider this ruleset taken from an .ini file:
+//   expected:
+//     if (os == "win") and (version == "6.1.7601") and not webrender and e10s: FAIL
+//     if (os == "win") and (version == "10.0.15063") and e10s: FAIL
+//     PASS
+// This will get converted to two tokensets:
+//   { '(os == "win")', '(version == "6.1.7601")', 'not webrender', 'e10s' }
+//   { '(os == "win")', '(version == "10.015063")', 'e10s' }
+// Then we take this rule:
+//   CollapseRule::new(vec![
+//       "(os == \"win\")",
+//       "(version == \"6.1.7601\")",
+//   ], vec![
+//       "not webrender",
+//   ]),
+// which basically says in english "if windows 7, then the not-webrender clause
+// is redundant". We check the three rules listed above against the "group"
+// consisting of just the first tokenset:
+// 1) The windows and version checks, which are the prerequisites for the rule,
+//    are present in the tokenset. check.
+// 2) There is one rule in the tokenset, and it has the one alternative
+//    condition. So this is trivially a 1:1 mapping. check.
+// 3) There is only one tokenset in the group so this is trivially true. check.
+// So we apply the collapsing indicated by the rule, which collapses the group
+// into a single rule without any of the alternative conditions.
+//
+// This reduces our tokensets to this:
+//   { '(os == "win")', '(version == "6.1.7601")', 'e10s' }
+//   { '(os == "win")', '(version == "10.015063")', 'e10s' }
+// Now we can use this rule:
+//   CollapseRule::new(vec![
+//       "(os == \"win\")",
+//   ], vec![
+//       "(version == \"6.1.7601\")",
+//       "(version == \"10.0.15063\")",
+//   ]),
+// to further collapse things. We make a group of the two tokensets and check
+// the conditions:
+// 1) Both tokensets in the group have the windows condition. check.
+// 2) There is exactly one tokenset in the group with each of the version
+//    conditions from the alternatives list. check.
+// 3) All the other conditions in the tokenset (basically the e10s one) are
+//    identical across the group. check.
+// So we collapse by dropping the version conditions and get this:
+//   { '(os == "win")', 'e10s' }
+// which translates back into:
+//   expected:
+//     if (os == "win") and e10s: FAIL
+//     PASS
+// and that's a minimal expression of the original thing, given the ruleset
+// we applied.
 fn build_collapse_rules() -> Vec<CollapseRule> {
     vec![
         // MacOS rules
@@ -286,31 +354,6 @@ fn collapse(tokensets: &mut Vec<Vec<String>>) {
         }
         changed = false;
     }
-/*
-        for rule in rules {
-            let mut satisfying_prereqs = Vec::new();
-            let mut i = 0;
-            while i != tokensets.len() {
-                if match_prereqs(&rule, &tokensets[i]) {
-                    satisfying_prereqs.push(tokensets.remove(i));
-                } else {
-                    i += 1;
-                }
-            }
-            if rule.alternatives.len() > satisfying_prereqs.len() {
-                continue;
-            }
-            if rule.alternatives.len() == 1 {
-                for i in 0..satisfying_prereqs.len() {
-                    satisfying_prereqs[i] = strip_token(&rule.alternatives[0], &satisfying_prereqs[i]);
-                }
-            } else if rule.alternatives.len() == 2 {
-            } else {
-                unimplemented!("Add generic nCx implementation");
-            }
-            tokensets.extend(satisfying_prereqs.into_iter());
-        }
-*/
 }
 
 fn emit(tokensets: &Vec<Vec<String>>, set_prefix: &Option<String>, set_suffix: &Option<String>) {
