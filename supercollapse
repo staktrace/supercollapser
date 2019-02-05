@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -eu
+
+USAGE="$0 path/to/mozilla-central"
+MOZSRC="${1?$USAGE}"
+
+cargo build --release
+BINARY="${PWD}/target/release/supercollapser"
+pushd "${MOZSRC}/testing/web-platform/meta"
+find . -name "*.ini" -type f |
+while read INIFILE; do
+    echo "Processing ${INIFILE}..."
+    "${BINARY}" "${INIFILE}" > "${INIFILE}.collapsed"
+    mv "${INIFILE}.collapsed" "${INIFILE}"
+done
