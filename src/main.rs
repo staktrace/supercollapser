@@ -106,43 +106,39 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
             "(version == \"6.1.7601\")",
             "(version == \"10.0.15063\")",
         ]),
+
+        // Linux rules
+        CollapseRule::new(vec![
+            "(os == \"linux\")",
+        ], vec![
+            "(version == \"Ubuntu 16.04\")",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"linux\")",
+            "(processor == \"x86_64\")",
+        ], vec![
+            "(bits == 64)",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"linux\")",
+            "(processor == \"x86\")",
+        ], vec![
+            "(bits == 32)",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"linux\")",
+            "(processor == \"x86\")",
+        ], vec![
+            "not webrender",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"linux\")",
+        ], vec![
+            "(processor == \"x86_64\")",
+            "(processor == \"x86\")",
+        ]),
     ]
 }
-
-/*
-static ALL_TOKENS : &'static [&'static str] = &[
-    "(os == \"linux\")",
-    "(os == \"win\")",
-    "(os == \"mac\")",
-    "(os == \"android\")",
-    "webrender",
-    "not webrender",
-    "debug",
-    "not debug",
-    "(version == \"6.1.7601\")",
-    "(version == \"10.0.15063\")",
-    "(version == \"Ubuntu 16.04\")",
-    "(version == \"OS X 10.10.5\")",
-    "(bits == 64)",
-    "(bits == 32)",
-    "(processor == \"x86\")",
-    "(processor == \"x86_64\")",
-    "e10s",
-    "not e10s",
-    "sw-e10s",
-    "not sw-e10s",
-];
-
-fn validate_tokenset(tokenset: &Vec<String>) -> bool {
-    for token in tokenset {
-        if !ALL_TOKENS.contains(&token.as_str()) {
-            error!("Unrecognized token {}", token);
-            return false;
-        }
-    }
-    true
-}
-*/
 
 fn match_prereqs(rule: &CollapseRule, tokenset: &Vec<String>) -> bool {
     for prereq in &rule.prerequisites {
