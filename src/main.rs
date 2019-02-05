@@ -182,17 +182,18 @@ fn try_collapse_flip(a: &Vec<String>, b: &Vec<String>) -> Option<Vec<String>> {
     if a.len() != b.len() {
         return None;
     }
+    trace!("Attempting flip...");
     let mut result = Vec::new();
     let mut flipped = false;
     for tok in a {
         if b.contains(tok) {
-            trace!("Token match {}", tok);
+            trace!("  Token match {}", tok);
             result.push(tok.clone());
         } else if !flipped && b.contains(&flip(tok)) {
-            trace!("Flipped {}", tok);
+            trace!("  Flipped {}", tok);
             flipped = true;
         } else {
-            trace!("Token mismatch {}", tok);
+            trace!("  Token mismatch {}", tok);
             return None;
         }
     }
@@ -223,23 +224,27 @@ fn try_collapse2(a: &Vec<String>, b: &Vec<String>, rule: &CollapseRule) -> Optio
     if !match_prereqs(rule, b) {
         return None;
     }
+    trace!("Attempting collapse2...");
     let mut result = Vec::new();
     let mut matched = false;
     for tok in a {
         if b.contains(tok) {
-            trace!("Token match {}", tok);
+            trace!("  Token match {}", tok);
             result.push(tok.clone());
             continue;
         } else if matched {
-            trace!("Token mismatch {}", tok);
+            trace!("  Token mismatch {}", tok);
             return None;
         }
         if let Some(alt) = remaining_alt(tok, rule) {
             if b.contains(&String::from(alt)) {
-                trace!("Matched alternatives {},{}", tok, alt);
+                trace!("  Matched alternatives {},{}", tok, alt);
                 matched = true;
                 continue;
             }
+        } else {
+            trace!("  Not an alt token {}", tok);
+            return None;
         }
     }
     Some(result)
