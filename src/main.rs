@@ -167,6 +167,14 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
             "(bits == 64)",
         ]),
 
+        // Win WebRender implies win10
+        CollapseRule::new(vec![
+            "(os == \"win\")",
+            "webrender",
+        ], vec![
+            "(version == \"10.0.15063\")",
+        ]),
+
         // Win version collapsing
         CollapseRule::new(vec![
             "(os == \"win\")",
@@ -204,6 +212,20 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
         ], vec![
             "(processor == \"x86_64\")",
             "(processor == \"x86\")",
+        ]),
+
+        // Linux WebRender implies 64-bit and e10s
+        CollapseRule::new(vec![
+            "(os == \"linux\")",
+            "webrender",
+        ], vec![
+            "(processor == \"x86_64\")",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"linux\")",
+            "webrender",
+        ], vec![
+            "e10s",
         ]),
     ]
 }
