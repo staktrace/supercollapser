@@ -227,6 +227,18 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
         ], vec![
             "e10s",
         ]),
+
+        // Android means no webrender, no e10s
+        CollapseRule::new(vec![
+            "(os == \"android\")",
+        ], vec![
+            "not webrender",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"android\")",
+        ], vec![
+            "not e10s",
+        ]),
     ]
 }
 
