@@ -2,6 +2,7 @@
 extern crate log;
 extern crate env_logger;
 
+use std::collections::HashSet;
 use std::env;
 use std::fs::File;
 use std::io::BufRead;
@@ -405,6 +406,7 @@ fn main() {
 
     let file = File::open(env::args().skip(1).next().unwrap()).unwrap();
     let reader = BufReader::new(&file);
+    let mut suffixes_seen = HashSet::new();
     let mut tokensets : Vec<Vec<String>> = Vec::new();
     let mut set_prefix = None;
     let mut set_suffix = None;
@@ -424,6 +426,10 @@ fn main() {
 
         if !part_of_set && tokensets.len() > 0 {
             collapse(&mut tokensets);
+            if suffixes_seen.contains(&set_suffix) {
+                warn!("File contains multiple tokensets with the same suffix");
+            }
+            suffixes_seen.insert(set_suffix.clone());
             emit(&tokensets, &set_prefix, &set_suffix);
             tokensets.clear();
         }
@@ -452,6 +458,9 @@ fn main() {
             continue;
         } else {
             println!("{}", line);
+            if line.trim().len() == 0 {
+                suffixes_seen.clear();
+            }
         }
     }
     if tokensets.len() > 0 {

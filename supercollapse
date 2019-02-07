@@ -11,6 +11,6 @@ pushd "${MOZSRC}/testing/web-platform/meta"
 find . -name "*.ini" -type f |
 while read INIFILE; do
     echo "Processing ${INIFILE}..."
-    "${BINARY}" "${INIFILE}" > "${INIFILE}.collapsed"
+    RUST_LOG=supercollapser=warn "${BINARY}" "${INIFILE}" > "${INIFILE}.collapsed"
     mv "${INIFILE}.collapsed" "${INIFILE}"
 done
