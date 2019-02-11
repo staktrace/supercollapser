@@ -210,6 +210,12 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
         ]),
         CollapseRule::new(vec![
             "(os == \"linux\")",
+            "not e10s",
+        ], vec![
+            "(processor == \"x86\")",
+        ]),
+        CollapseRule::new(vec![
+            "(os == \"linux\")",
         ], vec![
             "(processor == \"x86_64\")",
             "(processor == \"x86\")",
