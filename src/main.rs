@@ -356,38 +356,39 @@ fn try_collapse2(a: &Vec<String>, b: &Vec<String>, rule: &CollapseRule) -> Optio
 fn collapse(tokensets: &mut Vec<Vec<String>>) {
     let rules = build_collapse_rules();
 
-    let mut changed = false;
-    loop {
-        'outer: for i in 0..tokensets.len() {
-            for rule in &rules {
-                if let Some(set) = try_collapse(&tokensets[i], rule) {
-                    debug!("Collapsed {:?} to {:?} via {:?}", tokensets[i], set, rule);
-                    tokensets[i] = set;
-                }
-            }
+    'top: loop {
+        for i in 0..tokensets.len() {
             for j in 0..i {
                 if let Some(set) = try_collapse_flip(&tokensets[i], &tokensets[j]) {
                     debug!("Collapsed {:?} and {:?} to {:?} via flip", tokensets[i], tokensets[j], set);
                     tokensets[j] = set;
                     tokensets.remove(i);
-                    changed = true;
-                    break 'outer;
+                    continue 'top;
                 }
+            }
+        }
+        for i in 0..tokensets.len() {
+            for j in 0..i {
                 for rule in &rules {
                     if let Some(set) = try_collapse2(&tokensets[i], &tokensets[j], rule) {
                         debug!("Collapsed {:?} and {:?} to {:?} via {:?}", tokensets[i], tokensets[j], set, rule);
                         tokensets[j] = set;
                         tokensets.remove(i);
-                        changed = true;
-                        break 'outer;
+                        continue 'top;
                     }
                 }
             }
         }
-        if !changed {
-            break;
+        for i in 0..tokensets.len() {
+            for rule in &rules {
+                if let Some(set) = try_collapse(&tokensets[i], rule) {
+                    debug!("Collapsed {:?} to {:?} via {:?}", tokensets[i], set, rule);
+                    tokensets[i] = set;
+                    continue 'top;
+                }
+            }
         }
-        changed = false;
+        break;
     }
 }
 
