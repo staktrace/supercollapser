@@ -151,19 +151,19 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
         // Win64 rules
         CollapseRule::new(vec![
             "(os == \"win\")",
-            "(version == \"10.0.15063\")",
+            "(version == \"10.0.17134\")",
         ], vec![
             "e10s",
         ]),
         CollapseRule::new(vec![
             "(os == \"win\")",
-            "(version == \"10.0.15063\")",
+            "(version == \"10.0.17134\")",
         ], vec![
             "(processor == \"x86_64\")",
         ]),
         CollapseRule::new(vec![
             "(os == \"win\")",
-            "(version == \"10.0.15063\")",
+            "(version == \"10.0.17134\")",
         ], vec![
             "(bits == 64)",
         ]),
@@ -173,7 +173,7 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
             "(os == \"win\")",
             "webrender",
         ], vec![
-            "(version == \"10.0.15063\")",
+            "(version == \"10.0.17134\")",
         ]),
 
         // Win version collapsing
@@ -181,7 +181,7 @@ fn build_collapse_rules() -> Vec<CollapseRule> {
             "(os == \"win\")",
         ], vec![
             "(version == \"6.1.7601\")",
-            "(version == \"10.0.15063\")",
+            "(version == \"10.0.17134\")",
         ]),
 
         // Linux rules
